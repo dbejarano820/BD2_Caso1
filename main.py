@@ -1,11 +1,8 @@
-from sqlalchemy import create_engine, text, Column, Integer, Date, String
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
-from sqlalchemy.sql.schema import ForeignKey
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import select
+from engine import motor
+from tables import users, pets
 
-conn_url = 'postgresql://root:pass@db:5432/pg_database'  #Variable con el url de la base de datos
-
-engine = create_engine(conn_url, pool_size=20, max_overflow=0)  
 # Tipicamente se crea un engine por cada URL de una base de datos, se mantiene globalmente durante el proceso entero de la aplicación
 # Un solo engine se encarga de administrar muchas connectiones individuales a la base de datos, está diseñado para ser invocado concurrentemente
 # Es importante resaltar, que el engine es más efectivo cuando solo se crea uno al nivel modulo de la aplicación, no por cada objeto ni llamada de funcion
@@ -15,60 +12,32 @@ engine = create_engine(conn_url, pool_size=20, max_overflow=0)
 # Las conneciones son instancias del objeto 'Connection' del ORM, el cual es un objeto proxy para una verdadera DBPAI connection. Dicha conneción
 # se recupera del connection pool y en donde se crea el objeto Connection
 
-DBSession = sessionmaker(bind=engine) 
+DBSession = sessionmaker(bind=motor.getInstance().engine) 
 # Un session de SQL Alchemy establece todas las conversaciones del programa con la base de datos, provee una interfaz para queries donde retornan
 # objetos mapeados de ORM. 
 # El sessionmaker es un factory para los objetos de session con configuraciones establecidas, se le pasa un solo engine como parametro para tener una fuente de connexion
 # Acá lo importante es resaltar que una vez que se emite un query dentro dentro de un session, le solicita un recurso de conneción del engine al cual el session está ligado
 #Este session maker no crea sessions de la base de datos, si no del ORM que contiene configuraciones
 
-
-Base = declarative_base()
-# Acá se retorna un base class, todas las clases mapeadas deben heredar de el
-
 # Relacion 1 a N
 # Para dicha relación, se coloca un foreign key en la tabla secundaria que hace referencia a la principal (en este caso pets llevaria el foreign key del dueño, el user)
 # Luego se especifica un 'relationship' en el objeto padre, como referencia a una colección de elementos representados por el hijo
 # Esta relación ayuda en los joins
 
-class users(Base):
-    __tablename__ = 'users' # nombre de la tabla en la base de datos
-
-    id = Column(Integer, primary_key=True)  # Primary key
-    firstname = Column(String)
-    lastname = Column(String)
-    age = Column(Integer)
-    petid = relationship('pets')  #relationship
-
-    def __init__(self, firstname, lastname, age): # init del objeto
-        self.firstname = firstname
-        self.lastname = lastname
-        self.age = age
-
-class pets(Base):
-    __tablename__ = 'pets' # nombre de la tabla en la base de datos
-    
-    id = Column(Integer, primary_key=True) # Primary key
-    ownerid = Column(Integer, ForeignKey('users.id')) # Foreign key del dueño
-    animaltype = Column(String)
-    name = Column(String)
-
-    def __init__(self, ownerid, animaltype, name): # init del objeto
-        self.ownerid = ownerid
-        self.animaltype = animaltype
-        self.name = name
-
-
 
 # Acá se instancia un session ya con un engine ligado, se utiliza con un with (Python context manager) y por lo tanto se cierra solo al final
 # Transaccion que afecta a más de una tabla
 with DBSession() as session:
-    user1 = users(firstname='Oscar',lastname='Cerdas',age=25)
-    session.add(user1)    # se agrega un registro a la tabla de users
-    pet1 = pets(ownerid=4,animaltype='Horse',name='Speedy')
-    session.add(pet1) # se agregua un registro a la tabla de pets
-    session.commit()   # se hace un commit cuando se agregan datos a la session que deben ser actualizados
-
+    try:
+        user1 = users(firstname='Oscar',lastname='Cerdas',age=25)
+        session.add(user1)    # se agrega un registro a la tabla de users
+        pet1 = pets(ownerid=4,animaltype='Horse',name='Speedy')
+        session.add(pet1) # se agregua un registro a la tabla de pets
+        session.commit()   # se hace un commit cuando se agregan datos a la session que deben ser actualizados
+    except:
+        session.rollback()
+    
+# Previamente se le habia metido datos a la base
 
 with DBSession() as session:
     usuarios = session.query(users).all()     
@@ -79,7 +48,15 @@ for user in usuarios:
 print('')
 
 
+with DBSession() as session:   #Select para validar la relacion 1 a N
+    result = session.execute(
+        select(users.firstname, pets.animaltype, pets.name).join(users.pets).order_by(users.id, pets.id)
+    )
 
+for row in result:
+    print(f' The user: {row.firstname}   has a {row.animaltype} named {row.name}')
+
+    
 
 # SQL Commands when creating database tables
 #CREATE TABLE Users (
