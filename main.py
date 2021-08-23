@@ -50,12 +50,11 @@ print('')
 
 with DBSession() as session:   #Select para validar la relacion 1 a N
     result = session.execute(
-        select(users.firstname, pets.animaltype, pets.name).join(users.pets).order_by(users.id, pets.id)
+        select(users.firstname, pets.animaltype, pets.name).join(users.pets).order_by(users.id, pets.id) #users.pets es la coleccion de pets de cada usuario
     )
 
 for row in result:
     print(f' The user: {row.firstname}   has a {row.animaltype} named {row.name}')
-
     
 
 # SQL Commands when creating database tables
